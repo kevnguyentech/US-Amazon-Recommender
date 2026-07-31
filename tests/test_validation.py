@@ -1,10 +1,14 @@
 import pytest
 
+import pandas as pd
+
 try:
     import main
     from fastapi.testclient import TestClient
     client = TestClient(main.app)
-    trained_item_idx = int(main.train_df["item_idx"].iloc[0])
+    _train = pd.read_csv("data/train.csv")
+    trained_item_idx = int(_train["item_idx"].iloc[0])
+    del _train
 except Exception as e:
     pytest.skip(
         f"API could not be imported -- model likely not trained yet: {e}",
@@ -33,7 +37,8 @@ def test_untrained_but_in_range_index_is_rejected():
     # user_idx/item_idx are assigned from the full raw file, so some
     # in-range indices were never trained. Both endpoints must reject
     # those instead of silently predicting from an untouched embedding.
-    trained_users = set(main.train_df["user_idx"].unique().tolist())
+    _train = pd.read_csv("data/train.csv")
+    trained_users = set(_train["user_idx"].unique().tolist())
     untrained = next((u for u in range(int(main.n_users)) if u not in trained_users), None)
     if untrained is None:
         pytest.skip("no untrained-but-in-range user_idx in this dataset")
