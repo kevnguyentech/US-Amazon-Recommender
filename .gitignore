@@ -2,3 +2,4 @@ data/*.csv
 model/*.pt
 .venv/
 __pycache__/
+.pytest_cache/
