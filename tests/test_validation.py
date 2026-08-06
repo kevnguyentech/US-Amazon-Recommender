@@ -33,10 +33,13 @@ def test_endpoint_validation(endpoint, payload, expected):
 
 
 def test_untrained_but_in_range_index_is_rejected():
-    # prepare.py filters out users/items with fewer than 5 ratings AFTER
-    # user_idx/item_idx are assigned from the full raw file, so some
-    # in-range indices were never trained. Both endpoints must reject
-    # those instead of silently predicting from an untouched embedding.
+    # prepare.py already encodes user_idx/item_idx AFTER the >=5-ratings
+    # filter, so indices are compact -- this is not an encode-order bug.
+    # The gap comes from train_test_split: a user with exactly the minimum
+    # 5 ratings can have all of them land in the test split, leaving a
+    # valid in-range user_idx with zero rows in train.csv. Both endpoints
+    # must reject that index instead of silently predicting from an
+    # untouched embedding.
     _train = pd.read_csv("data/train.csv")
     trained_users = set(_train["user_idx"].unique().tolist())
     untrained = next((u for u in range(int(main.n_users)) if u not in trained_users), None)
