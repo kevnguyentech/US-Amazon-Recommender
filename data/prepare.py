@@ -1,5 +1,6 @@
 # data/prepare.py
 import json
+import os
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -25,8 +26,13 @@ def main():
     n_items = int(df['item_idx'].nunique())
     print(f"Users after filtering: {n_users}, Items: {n_items}")
 
+    existing_meta = {}
+    if os.path.exists("data/metadata.json"):
+        with open("data/metadata.json") as f:
+            existing_meta = json.load(f)
+
     with open("data/metadata.json", "w") as f:
-        json.dump({"n_users": n_users, "n_items": n_items}, f)
+        json.dump({**existing_meta, "n_users": n_users, "n_items": n_items}, f)
     print("Saved metadata.json")
 
     print(f"After filtering: {df.shape}")
