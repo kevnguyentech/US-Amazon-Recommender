@@ -16,7 +16,8 @@ Each user and item gets a learned embedding vector. Predicted rating = dot produ
 US_Amazon_Recommender/
 ├── data/
 │   ├── load_amazon.py    # pulls Amazon Reviews 2023 via HF datasets
-│   └── prepare.py        # filters sparse users/items, splits train/test
+│   ├── prepare.py        # filters sparse users/items, splits train/test
+│   └── check_data.py     # quick null/describe check on the raw CSV
 ├── model/
 │   ├── dataset.py         # PyTorch Dataset wrapper
 │   ├── two_tower.py       # model architecture
@@ -24,6 +25,7 @@ US_Amazon_Recommender/
 │   └── evaluate.py        # precision@k eval with random baseline
 ├── api/
 │   └── main.py            # FastAPI predict + recommend endpoints
+├── tests/                 # pytest suite for prepare/model/api
 └── requirements.txt
 ```
 
@@ -34,6 +36,7 @@ python data/load_amazon.py
 python data/prepare.py
 python model/train.py
 python model/evaluate.py
+python -m pytest tests/ -v
 uvicorn api.main:app --reload
 ```
 API docs at `http://127.0.0.1:8000/docs`. Two endpoints: `/predict` (single user-item rating prediction) and `/recommend` (top-k items for a user).
