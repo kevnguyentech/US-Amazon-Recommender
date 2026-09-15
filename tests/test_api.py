@@ -7,7 +7,7 @@ try:
     from main import app
     from fastapi.testclient import TestClient
     client = TestClient(app)
-except Exception as e:
+except (FileNotFoundError, OSError) as e:
     pytest.skip(
         f"API could not be imported -- model likely not trained yet: {e}",
         allow_module_level=True,
