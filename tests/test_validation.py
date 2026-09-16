@@ -9,7 +9,7 @@ try:
     _train = pd.read_csv("data/train.csv")
     trained_item_idx = int(_train["item_idx"].iloc[0])
     del _train
-except Exception as e:
+except (FileNotFoundError, OSError) as e:
     pytest.skip(
         f"API could not be imported -- model likely not trained yet: {e}",
         allow_module_level=True,
@@ -32,22 +32,24 @@ def test_endpoint_validation(endpoint, payload, expected):
     assert r.status_code == expected
 
 
-def test_untrained_but_in_range_index_is_rejected():
-    # prepare.py already encodes user_idx/item_idx AFTER the >=5-ratings
-    # filter, so indices are compact -- this is not an encode-order bug.
-    # The gap comes from train_test_split: a user with exactly the minimum
-    # 5 ratings can have all of them land in the test split, leaving a
-    # valid in-range user_idx with zero rows in train.csv. Both endpoints
-    # must reject that index instead of silently predicting from an
-    # untouched embedding.
+def test_every_in_range_user_has_training_rows():
+    # prepare.py encodes user_idx/item_idx AFTER the >=5-ratings filter, so
+    # indices are compact -- this was never an encode-order bug. The gap used
+    # to come from the random split: a user with exactly the minimum 5 ratings
+    # could have all of them land in test, leaving a valid in-range user_idx
+    # with zero rows in train.csv and an untouched embedding behind it.
+    #
+    # The per-user temporal split holds out only a fraction of each user's
+    # interactions, so every user keeps training rows and that gap can no
+    # longer arise. This asserts the guarantee directly. The endpoint guards
+    # stay as defense against metadata/checkpoint drift and are covered by the
+    # out-of-range cases in `cases` above.
     _train = pd.read_csv("data/train.csv")
     trained_users = set(_train["user_idx"].unique().tolist())
-    untrained = next((u for u in range(int(main.n_users)) if u not in trained_users), None)
-    if untrained is None:
-        pytest.skip("no untrained-but-in-range user_idx in this dataset")
+    untrained = [u for u in range(int(main.n_users)) if u not in trained_users]
 
-    r_predict = client.post("/predict", json={"user_idx": untrained, "item_idx": 0})
-    assert r_predict.status_code == 400
-
-    r_recommend = client.post("/recommend", json={"user_idx": untrained, "top_k": 5})
-    assert r_recommend.status_code == 400
+    assert not untrained, (
+        f"{len(untrained)} in-range user_idx have no training rows "
+        f"(first few: {untrained[:5]}); the split should leave every user "
+        f"with train data, and the endpoints must reject any that slip through"
+    )

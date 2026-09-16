@@ -31,15 +31,17 @@ def main():
     for epoch in range(EPOCHS):
         model.train()
         total_loss = 0
+        total_train_samples = 0
         for users, items, ratings in train_loader:
             optimizer.zero_grad()
             preds = model(users, items)
             loss = loss_fn(preds, ratings)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
+            total_loss += loss.item() * len(ratings)
+            total_train_samples += len(ratings)
 
-        avg_loss = total_loss / len(train_loader)
+        avg_loss = total_loss / total_train_samples
         print(f"Epoch {epoch+1}/{EPOCHS} - Train Loss: {avg_loss:.4f}")
 
     model.eval()

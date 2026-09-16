@@ -1,4 +1,5 @@
 data/*.csv
+data/metadata.json
 model/*.pt
 .venv/
 __pycache__/

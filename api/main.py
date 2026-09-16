@@ -24,6 +24,13 @@ valid_item_idx = torch.tensor(sorted(train_df['item_idx'].unique()), dtype=torch
 # drift if the model is ever retrained on a subset of users or items.
 valid_user_idx_set = set(train_df['user_idx'].unique().tolist())
 valid_item_idx_set = set(valid_item_idx.tolist())
+# item positions (not ids) each user already rated, for exclusion at serve time
+_pos_of_item = {item: pos for pos, item in enumerate(valid_item_idx.tolist())}
+seen_positions = (
+    train_df.groupby('user_idx')['item_idx']
+    .apply(lambda s: [_pos_of_item[i] for i in s.unique()])
+    .to_dict()
+)
 del train_df
 
 embedding_dim = meta["embedding_dim"]
@@ -62,6 +69,15 @@ def recommend(req: RecommendRequest):
 
     with torch.no_grad():
         preds = model(user_tensor, all_items)
+
+    seen = seen_positions.get(req.user_idx, [])
+    if len(valid_item_idx) - len(seen) < req.top_k:
+        raise HTTPException(
+            status_code=400,
+            detail=f"top_k must be in [1, {len(valid_item_idx) - len(seen)}] for this user "
+                   f"({len(seen)} items already rated are excluded)",
+        )
+    preds[seen] = float('-inf')
 
     top_k = torch.topk(preds, req.top_k)
     top_items = valid_item_idx[top_k.indices].tolist()

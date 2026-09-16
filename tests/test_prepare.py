@@ -20,10 +20,15 @@ def _synthetic_df():
 
 def _apply_prepare_logic(df):
     """Mirror of the core logic in data/prepare.py."""
-    user_counts = df["user_id"].value_counts()
-    item_counts = df["item_id"].value_counts()
-    df = df[df["user_id"].isin(user_counts[user_counts >= 5].index)].copy()
-    df = df[df["item_id"].isin(item_counts[item_counts >= 5].index)].copy()
+    while True:
+        prev_len = len(df)
+        user_counts = df["user_id"].value_counts()
+        df = df[df["user_id"].isin(user_counts[user_counts >= 5].index)]
+        item_counts = df["item_id"].value_counts()
+        df = df[df["item_id"].isin(item_counts[item_counts >= 5].index)]
+        if len(df) == prev_len:
+            break
+    df = df.copy()
     df["user_idx"] = df["user_id"].astype("category").cat.codes
     df["item_idx"] = df["item_id"].astype("category").cat.codes
     return df
@@ -75,14 +80,19 @@ def test_stale_index_regression():
     Regression: if indices are assigned BEFORE filtering, max(user_idx) > nunique-1
     because filtered-out users leave gaps. Encoding after filtering prevents this.
     
-    Uses interleaved user names so dropped users (B, D, F) have codes 1, 3, 5
-    and kept users (A, C, E) have codes 0, 2, 4 -- demonstrating the gap.
+    Uses interleaved user names so dropped users (B, D, F, H, J) have codes
+    1, 3, 5, 7, 9 and kept users (A, C, E, G, I) have codes 0, 2, 4, 6, 8 --
+    demonstrating the gap.
+
+    Five kept users are needed, not three: with only three, every item holds
+    just three ratings once the sparse users are filtered out, so a correct
+    5-core pass empties the frame entirely and there are no indices to compare.
     """
     rows = []
-    for user in ["A", "C", "E"]:  # kept: >=5 ratings each
+    for user in ["A", "C", "E", "G", "I"]:  # kept: >=5 ratings each
         for item in ["X", "Y", "Z", "W", "V"]:
             rows.append({"user_id": user, "item_id": item, "rating": 4.0})
-    for user in ["B", "D", "F"]:  # dropped: only 2 ratings each
+    for user in ["B", "D", "F", "H", "J"]:  # dropped: only 2 ratings each
         rows.append({"user_id": user, "item_id": "X", "rating": 3.0})
         rows.append({"user_id": user, "item_id": "Y", "rating": 3.0})
     df = pd.DataFrame(rows)
@@ -95,7 +105,7 @@ def test_stale_index_regression():
     stale_max = df_filtered["user_idx_stale"].max()
     stale_nunique = df_filtered["user_idx_stale"].nunique()
 
-    # A=0, B=1, C=2, D=3, E=4, F=5 -- dropping B,D,F leaves codes 0,2,4: max=4 > nunique-1=2
+    # A=0, B=1, ... J=9 -- dropping B,D,F,H,J leaves codes 0,2,4,6,8: max=8 > nunique-1=4
     assert stale_max > stale_nunique - 1, (
         "Stale approach should produce gaps when dropped users are interleaved alphabetically"
     )
@@ -103,3 +113,21 @@ def test_stale_index_regression():
     # Correct approach (encode after filtering): compact 0..n-1, no gaps
     correct = _apply_prepare_logic(df)
     assert correct["user_idx"].max() == correct["user_idx"].nunique() - 1
+
+
+def test_five_core_converges():
+    """One filtering pass is not enough: dropping sparse users can starve
+    an item below the threshold, which must then drop too."""
+    rows = []
+    for user in ["A", "B", "C", "D", "E"]:
+        for item in ["X", "Y", "Z", "W", "V"]:
+            rows.append({"user_id": user, "item_id": item, "rating": 4.0})
+    for user in ["F", "G", "H", "I", "J"]:      # 1 rating each, all dropped
+        rows.append({"user_id": user, "item_id": "Q", "rating": 3.0})
+    rows.append({"user_id": "A", "item_id": "Q", "rating": 5.0})
+
+    filtered = _apply_prepare_logic(pd.DataFrame(rows))
+
+    assert "Q" not in filtered["item_id"].values
+    assert (filtered["item_id"].value_counts() >= 5).all()
+    assert (filtered["user_id"].value_counts() >= 5).all()

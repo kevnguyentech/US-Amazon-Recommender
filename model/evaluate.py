@@ -28,7 +28,7 @@ def main():
     random_precisions = []
     with torch.no_grad():
         for user_idx, group in test_df.groupby('user_idx'):
-            if len(group) < K:
+            if len(group) <= K:
                 continue
             actual_ratings = group['rating'].values
             random_idx = random.sample(range(len(group)), K)
@@ -42,7 +42,7 @@ def main():
     precisions = []
     with torch.no_grad():
         for user_idx, group in test_df.groupby('user_idx'):
-            if len(group) < K:
+            if len(group) <= K:
                 continue
 
             item_ids = torch.tensor(group['item_idx'].values, dtype=torch.long)

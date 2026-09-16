@@ -3,7 +3,6 @@ import json
 import os
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 
 def main():
@@ -39,7 +38,12 @@ def main():
     print(f"Items after filtering: {df['item_id'].nunique()}")
     print(f"Avg ratings per item: {len(df) / df['item_id'].nunique():.2f}")
 
-    train, test = train_test_split(df, test_size=0.2, random_state=42)
+    # hold out each user's most recent 20% of interactions
+    df = df.sort_values('timestamp')
+    rank = df.groupby('user_idx').cumcount(ascending=False)
+    n_test = df.groupby('user_idx')['user_idx'].transform('size') * 0.2
+    test_mask = rank < n_test
+    train, test = df[~test_mask], df[test_mask]
 
     train.to_csv("data/train.csv", index=False)
     test.to_csv("data/test.csv", index=False)
